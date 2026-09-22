@@ -19,6 +19,10 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                // Spring Security가 자동 등록하는 기본 로그아웃 필터가 POST /logout을 가로채
+                // AuthController#logout()에 도달하기 전에 /login?logout으로 리다이렉트해 버린다.
+                // 우리 자체 로그아웃 엔드포인트를 쓰므로 기본 필터는 끈다.
+                .logout(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }

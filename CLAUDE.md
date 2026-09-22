@@ -26,21 +26,42 @@ docker build -t sj-lab-authserver .
 클라이언트 → POST /auth/login {username,password}
            → QfieldCloudAuthService 가 QFieldCloud POST /api/v1/auth/login/ 에 그대로 위임 검증
            → 성공하면 JwtService 가 이 서버만 서명하는 sj-lab 전용 JWT 발급 (QFieldCloud 토큰은 버림)
-           → 응답: { accessToken, tokenType: "Bearer", expiresIn, username }
+           → 응답: { accessToken, tokenType: "Bearer", expiresIn, username } + Set-Cookie(세션 쿠키)
 ```
 
 - `QfieldCloudAuthService`: 고정 서비스 계정이 아니라 **매 로그인 요청의 사용자 아이디/비밀번호**를 그대로 QFieldCloud 로그인 API에 넘겨 검증한다. `mapservice-rest`의 `QfieldMediaServiceImpl`이 쓰는 것과 같은 API 계약(`{"username","password"} → {"token"}`)을 재사용했다. 400/401은 "아이디 또는 비밀번호가 올바르지 않습니다"로 401 매핑, 그 외 오류는 502.
 - `JwtService`: `AUTH_JWT_SECRET`(HS256, 최소 32바이트)으로 서명하는 자체 JWT를 발급·검증한다. QFieldCloud가 내려준 토큰과는 별개이며, sj-lab 서비스들은 이 JWT만 신뢰하도록 설계한다.
-- `SecurityConfig`: 이 서버 자신은 모든 요청을 permitAll로 열어 둔다(로그인 엔드포인트이므로). CSRF는 비활성화.
+- `SecurityConfig`: 이 서버 자신은 모든 요청을 permitAll로 열어 둔다(로그인 엔드포인트이므로). CSRF는 비활성화. **Spring Security 기본 로그아웃 필터도 명시적으로 꺼야 한다** — 안 끄면 `POST /logout`을 우리 `AuthController#logout()`보다 먼저 가로채 `/login?logout`으로 리다이렉트해 버린다(직접 겪은 문제, `.logout(AbstractHttpConfigurer::disable)` 참고).
+
+### SSO(사이트 간 자동 로그인) — 2026-09-22 추가
+
+`sj-lab-hub`, `sj-lab-mapservice`가 각각 로그인 화면을 갖는 대신, **이 서버가 서빙하는 하나의 로그인 페이지**(`GET /login.html`, `src/main/resources/static/login.html`)로 리다이렉트 방식으로 로그인한다. 별도 SSO 라이브러리나 공유 쿠키 도메인 설정 없이, 다음 흐름으로 "한 곳에서 로그인하면 다른 사이트도 로그인 상태"를 구현했다.
+
+```
+1. hub/mapservice 접속 시 로컬(localStorage)에 유효한 토큰이 없으면
+   /auth/login.html?redirect_uri=<원래 주소> 로 리다이렉트 (프론트 쪽 gate, 아래 참고)
+2. login.html 은 자기 자신의 오리진(=게이트웨이)에 세션 쿠키가 있는지 GET /auth/session 으로 먼저 확인
+   - 있으면: 폼을 보여주지 않고 새 토큰을 받아 바로 3번으로
+   - 없으면: 로그인 폼 표시 → 제출 시 POST /auth/login (성공하면 쿠키도 같이 내려옴)
+3. login.html 이 redirect_uri 로 다시 이동하면서 토큰을 URL 해시(#auth_token=...)에 실어 보냄
+4. 원래 사이트의 gate 스크립트가 해시에서 토큰을 꺼내 localStorage 에 저장하고 해시를 지움
+```
+
+- **쿠키(`sj_session`)는 이 로그인 페이지 자신의 오리진에만 쓰인다** — hub/mapservice 로는 전혀 전달되지 않는다(각 사이트는 3번 단계의 URL 해시로 받은 토큰을 **자기 localStorage**에 각자 저장). 그래서 쿠키의 `SameSite`/`Secure`/도메인 공유를 고민할 필요가 없다 — 로그인 페이지 자기 자신에게 다시 접속할 때만(=최상위 탐색, `SameSite=Lax`로 충분) "이미 로그인했는지" 확인하는 용도.
+- `GET /session`: 쿠키만으로 인증(Authorization 헤더 불필요). 유효하면 **새 토큰을 발급**해 돌려준다(리프레시처럼 동작).
+- `POST /logout`: 이 서버(로그인 페이지)의 세션 쿠키만 지운다. **각 사이트가 이미 받아 간 토큰까지 무효화하지는 않는다** — 진짜 single-logout(다른 탭/사이트까지 전부 로그아웃)은 구현하지 않았다(아래 남은 작업 참고). 프론트의 `SjLabAuth.logout()`은 자기 localStorage를 지우고 로그인 페이지로 보내는 것까지만 한다.
+- `redirect_uri` 오픈 리다이렉트 방지: `login.html`이 허용 오리진 목록(`localhost:3000`, `localhost:4000`, `https://sj-lab.co.kr`, `https://www.sj-lab.co.kr`)에 없는 `redirect_uri`는 거부한다. 새 프론트 도메인을 추가하면 `login.html`의 `ALLOWED_REDIRECT_ORIGINS`도 함께 고칠 것.
+- 프론트 쪽 gate 스크립트(`sj-lab-mapservice`의 `js/auth-gate.js`, `sj-lab-hub`의 `public/index.html` 인라인 스크립트)는 이 저장소가 아니라 각 프론트 저장소에 있다 — 로직은 동일하지만 빌드 도구가 달라(하나는 무빌드 정적 사이트, 하나는 webpack) 공유 모듈 대신 내용을 복제했다. 한쪽을 고치면 다른 쪽도 함께 고칠 것.
 
 ## 현재 범위와 남은 작업 (중요)
 
-이 저장소는 **"로그인 서버 발급 + 게이트웨이 라우팅"까지만** 구축된 상태입니다(2026-09-22, 사용자 확정 범위). 다음은 아직 하지 않았습니다 — 의도적인 제한이니 마음대로 확장하지 말고, 필요하면 사용자에게 먼저 확인할 것:
+2026-09-22 기준 **"로그인 서버 + SSO 리다이렉트 로그인 페이지 + hub/mapservice 전면 게이트"까지** 구축했습니다(사용자 확정 범위). 다음은 의도적으로 하지 않았습니다 — 마음대로 확장하지 말고, 필요하면 사용자에게 먼저 확인할 것:
 
-- **다른 서비스(mapservice-rest, scheduler 등) API에 토큰 검증 강제 없음** — 지금은 로그인·토큰 발급만 되고, 게이트웨이나 다른 서비스가 이 토큰을 요구하지 않는다. 전면 적용하려면 게이트웨이에 전역 필터(JWT 검증 후 헤더로 사용자명 전달 등)를 추가해야 하고, `sj-lab-mapservice`(프론트)에 로그인 화면도 먼저 만들어야 한다.
-- **회원 정보 캐시/역할(권한) 개념 없음** — 지금은 QFieldCloud 로그인 성공 여부만 확인하고 `username`만 다룬다. 역할(관리자/담당자 등)이 필요해지면 이 서버에 별도 사용자 프로필 테이블을 추가할지, QFieldCloud 응답의 다른 필드를 쓸지 결정이 필요하다.
-- **리프레시 토큰 없음** — 만료되면 다시 `/auth/login`을 호출해야 한다.
-- **운영 프로파일(application-prod.yml) 없음** — 로컬(`local`)만 있다. 배포하려면 게이트웨이/스케줄러처럼 운영 Eureka 주소(`eureka.sj-lab.co.kr`)를 추가하고, `AUTH_JWT_SECRET`을 k8s Secret으로 주입해야 한다(저장소가 public이므로 절대 파일에 평문으로 넣지 말 것). `JwtService.validateSecret()`이 `local` 프로파일이 아닌데 기본 시크릿이면 기동 자체를 막으니, 배포 전 Secret을 빼먹으면 기동 실패 로그로 바로 드러난다.
+- **백엔드 API(mapservice-rest, scheduler)에 토큰 검증 강제 없음** — hub/mapservice는 화면 접근을 막지만(프론트 UX 게이트), API를 직접 호출하면 토큰 없이도 그대로 동작한다. 진짜 보안 경계가 필요해지면 게이트웨이 전역 필터(JWT 검증 후 헤더로 사용자명 전달 등)를 추가해야 한다.
+- **진짜 single-logout 없음** — `/auth/logout`은 로그인 페이지 자신의 쿠키만 지운다. 한 사이트에서 로그아웃해도 다른 사이트는 토큰이 자연 만료(기본 12시간)될 때까지 로그인 상태로 남는다. 전 사이트 동시 로그아웃이 필요하면 iframe 기반 로그아웃 전파 등을 추가로 설계해야 한다.
+- **회원 정보 캐시/역할(권한) 개념 없음** — 지금은 QFieldCloud 로그인 성공 여부만 확인하고 `username`만 다룬다.
+- **리프레시 토큰 없음** — `GET /session`이 쿠키 기반으로 비슷한 역할을 하지만, 쿠키 자체가 없는 상태(예: 다른 브라우저)에서는 다시 `/auth/login`을 호출해야 한다.
+- **운영 프로파일(application-prod.yml) 없음** — 로컬(`local`)만 있다. 배포하려면 게이트웨이/스케줄러처럼 운영 Eureka 주소(`eureka.sj-lab.co.kr`)를 추가하고, `AUTH_JWT_SECRET`을 k8s Secret으로 주입해야 한다(저장소가 public이므로 절대 파일에 평문으로 넣지 말 것). `JwtService.validateSecret()`이 `local` 프로파일이 아닌데 기본 시크릿이면 기동 자체를 막으니, 배포 전 Secret을 빼먹으면 기동 실패 로그로 바로 드러난다. `auth.cookie.secure`도 마찬가지로 운영에서는 반드시 `true`(기본값)여야 한다.
 - **`/auth/login`에 레이트 리미팅/잠금 없음** — 매 요청이 실제 QFieldCloud 로그인 API로 그대로 전달되므로, 지금 상태로 외부에 노출하면 무차별 대입 공격 통로가 된다. 로컬/사내망 밖으로 열기 전에 IP 또는 계정 단위 속도 제한을 추가할 것.
 
 ## 참고
