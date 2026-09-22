@@ -1,0 +1,25 @@
+server:
+  port: 0
+  servlet:
+    context-path: /auth
+
+spring:
+  application:
+    name: sj-lab-authserver
+
+# QFieldCloud 는 sj-lab-mapservice-rest/docs 에 공개된 것과 같은 인스턴스 주소이며 비밀값이 아니다.
+qfield:
+  base-url: https://qfield.sj-lab.co.kr
+
+auth:
+  jwt:
+    # 운영에서는 반드시 AUTH_JWT_SECRET 환경변수로 덮어쓸 것 — 이 값은 로컬 개발 전용이며
+    # 저장소가 public 이라 실제 비밀값을 여기에 적지 않는다.
+    secret: ${AUTH_JWT_SECRET:local-dev-only-insecure-secret-please-override-32bytes-min}
+    expiration-seconds: ${AUTH_JWT_EXPIRATION_SECONDS:43200}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
