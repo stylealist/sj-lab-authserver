@@ -40,7 +40,8 @@ docker build -t sj-lab-authserver .
 - **다른 서비스(mapservice-rest, scheduler 등) API에 토큰 검증 강제 없음** — 지금은 로그인·토큰 발급만 되고, 게이트웨이나 다른 서비스가 이 토큰을 요구하지 않는다. 전면 적용하려면 게이트웨이에 전역 필터(JWT 검증 후 헤더로 사용자명 전달 등)를 추가해야 하고, `sj-lab-mapservice`(프론트)에 로그인 화면도 먼저 만들어야 한다.
 - **회원 정보 캐시/역할(권한) 개념 없음** — 지금은 QFieldCloud 로그인 성공 여부만 확인하고 `username`만 다룬다. 역할(관리자/담당자 등)이 필요해지면 이 서버에 별도 사용자 프로필 테이블을 추가할지, QFieldCloud 응답의 다른 필드를 쓸지 결정이 필요하다.
 - **리프레시 토큰 없음** — 만료되면 다시 `/auth/login`을 호출해야 한다.
-- **운영 프로파일(application-prod.yml) 없음** — 로컬(`local`)만 있다. 배포하려면 게이트웨이/스케줄러처럼 운영 Eureka 주소(`eureka.sj-lab.co.kr`)를 추가하고, `AUTH_JWT_SECRET`을 k8s Secret으로 주입해야 한다(저장소가 public이므로 절대 파일에 평문으로 넣지 말 것).
+- **운영 프로파일(application-prod.yml) 없음** — 로컬(`local`)만 있다. 배포하려면 게이트웨이/스케줄러처럼 운영 Eureka 주소(`eureka.sj-lab.co.kr`)를 추가하고, `AUTH_JWT_SECRET`을 k8s Secret으로 주입해야 한다(저장소가 public이므로 절대 파일에 평문으로 넣지 말 것). `JwtService.validateSecret()`이 `local` 프로파일이 아닌데 기본 시크릿이면 기동 자체를 막으니, 배포 전 Secret을 빼먹으면 기동 실패 로그로 바로 드러난다.
+- **`/auth/login`에 레이트 리미팅/잠금 없음** — 매 요청이 실제 QFieldCloud 로그인 API로 그대로 전달되므로, 지금 상태로 외부에 노출하면 무차별 대입 공격 통로가 된다. 로컬/사내망 밖으로 열기 전에 IP 또는 계정 단위 속도 제한을 추가할 것.
 
 ## 참고
 

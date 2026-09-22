@@ -11,6 +11,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * sj-lab 의 로그인 계정은 별도 회원 DB를 두지 않고 QFieldCloud 계정을 그대로 사용한다.
@@ -37,8 +39,18 @@ public class QfieldCloudAuthService {
 
     /** 로그인 성공 시 QFieldCloud 가 확인해 준 사용자명을 그대로 돌려준다. */
     public String verifyCredentials(String username, String password) {
-        String body = String.format("{\"username\":\"%s\",\"password\":\"%s\"}",
-                escapeJson(username), escapeJson(password));
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("username", username);
+        payload.put("password", password);
+
+        String body;
+        try {
+            // 수동 문자열 조립 대신 Jackson으로 직렬화해 제어 문자(\n, \t 등)가 섞인 비밀번호도
+            // 올바르게 이스케이프되도록 한다.
+            body = objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            throw AuthException.upstreamError("로그인 요청을 만들지 못했습니다.");
+        }
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(trimmedBaseUrl() + "/api/v1/auth/login/"))
                 .header("Content-Type", "application/json")
@@ -78,9 +90,5 @@ public class QfieldCloudAuthService {
 
     private String trimmedBaseUrl() {
         return baseUrl.replaceAll("/+$", "");
-    }
-
-    private static String escapeJson(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
