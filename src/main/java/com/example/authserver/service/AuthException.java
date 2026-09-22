@@ -1,28 +1,34 @@
 package com.example.authserver.service;
 
-/** 인증 관련 실패. {@link #invalidCredentials()}/{@link #invalidToken()}는 401로, 그 외는 502로 매핑한다. */
+import org.springframework.http.HttpStatus;
+
+/** 인증 관련 실패. 응답 상태 코드를 함께 싣는다(AuthController#handleAuthException). */
 public class AuthException extends RuntimeException {
 
-    private final boolean clientFault;
+    private final HttpStatus status;
 
-    private AuthException(String message, boolean clientFault) {
+    private AuthException(String message, HttpStatus status) {
         super(message);
-        this.clientFault = clientFault;
+        this.status = status;
     }
 
     public static AuthException invalidCredentials() {
-        return new AuthException("아이디 또는 비밀번호가 올바르지 않습니다.", true);
+        return new AuthException("아이디 또는 비밀번호가 올바르지 않습니다.", HttpStatus.UNAUTHORIZED);
     }
 
     public static AuthException invalidToken() {
-        return new AuthException("유효하지 않거나 만료된 토큰입니다.", true);
+        return new AuthException("유효하지 않거나 만료된 토큰입니다.", HttpStatus.UNAUTHORIZED);
     }
 
     public static AuthException upstreamError(String message) {
-        return new AuthException(message, false);
+        return new AuthException(message, HttpStatus.BAD_GATEWAY);
     }
 
-    public boolean isClientFault() {
-        return clientFault;
+    public static AuthException demoNotConfigured() {
+        return new AuthException("체험용 계정이 설정되지 않았습니다.", HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    public HttpStatus status() {
+        return status;
     }
 }

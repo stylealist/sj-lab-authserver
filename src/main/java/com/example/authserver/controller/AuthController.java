@@ -33,10 +33,30 @@ public class AuthController {
     @Value("${auth.cookie.secure:true}")
     private boolean cookieSecure;
 
+    /** 체험용 계정. 비밀번호가 페이지·저장소에 노출되지 않도록 환경변수(Secret)로만 주입한다. */
+    @Value("${auth.demo.username:}")
+    private String demoUsername;
+
+    @Value("${auth.demo.password:}")
+    private String demoPassword;
+
     /** QFieldCloud 계정(아이디/비밀번호)으로 로그인해 sj-lab 서비스용 JWT를 발급받는다. */
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        String username = qfieldCloudAuthService.verifyCredentials(request.username(), request.password());
+        return issueSession(request.username(), request.password());
+    }
+
+    /** 로그인 페이지의 "체험용 계정으로 로그인" 버튼. 설정되지 않았으면 503(일반 로그인은 영향 없음). */
+    @PostMapping("/login/demo")
+    public ResponseEntity<LoginResponse> demoLogin() {
+        if (demoUsername.isBlank() || demoPassword.isBlank()) {
+            throw AuthException.demoNotConfigured();
+        }
+        return issueSession(demoUsername, demoPassword);
+    }
+
+    private ResponseEntity<LoginResponse> issueSession(String rawUsername, String password) {
+        String username = qfieldCloudAuthService.verifyCredentials(rawUsername, password);
         String token = jwtService.issueToken(username);
         LoginResponse body = new LoginResponse(token, jwtService.expirationSeconds(), username);
         return ResponseEntity.ok()
@@ -95,7 +115,6 @@ public class AuthController {
 
     @ExceptionHandler(AuthException.class)
     public ResponseEntity<Map<String, String>> handleAuthException(AuthException e) {
-        HttpStatus status = e.isClientFault() ? HttpStatus.UNAUTHORIZED : HttpStatus.BAD_GATEWAY;
-        return ResponseEntity.status(status).body(Map.of("message", e.getMessage()));
+        return ResponseEntity.status(e.status()).body(Map.of("message", e.getMessage()));
     }
 }

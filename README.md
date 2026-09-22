@@ -5,6 +5,7 @@ sj-lab 마이크로서비스 생태계를 위한 로그인 서버입니다. 별�
 - `GET /auth/login.html` — sj-lab 전체가 공유하는 로그인 페이지(SSO). `redirect_uri` 파라미터로 원래 사이트에 토큰을 실어 돌려보냅니다.
 - `POST /auth/login` — `{ "username", "password" }`를 받아 QFieldCloud `/api/v1/auth/login/`에 위임 검증하고, 성공하면 sj-lab 전용 JWT를 발급합니다(세션 쿠키도 함께 내려줌).
 - `GET /auth/session` — 세션 쿠키만으로 이미 로그인돼 있는지 확인하고, 유효하면 새 토큰을 발급합니다(로그인 페이지 재방문 시 폼을 다시 보여주지 않기 위함).
+- `POST /auth/login/demo` — 체험용 계정으로 로그인합니다(계정 정보는 서버 환경변수에만 있음).
 - `POST /auth/logout` — 로그인 페이지의 세션 쿠키를 지웁니다.
 - `GET /auth/me` — `Authorization: Bearer <token>`으로 토큰 유효성을 확인합니다.
 
@@ -27,3 +28,4 @@ mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local
 |---|---|---|
 | `AUTH_JWT_SECRET` | 이 서버가 발급하는 JWT 서명 키(HS256, 최소 32바이트) | 운영 필수(로컬은 기본값 사용 가능, 저장소가 public이라 기본값은 안전하지 않음) |
 | `AUTH_JWT_EXPIRATION_SECONDS` | 토큰 만료(초), 기본 43200(12시간) | 선택 |
+| `AUTH_DEMO_USERNAME` / `AUTH_DEMO_PASSWORD` | 로그인 페이지 "체험용 계정으로 로그인"(`POST /auth/login/demo`)이 쓰는 QFieldCloud 계정 | 선택(없으면 데모 버튼만 503) |

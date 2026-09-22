@@ -247,17 +247,31 @@
       });
   });
 
-  // 체험용 계정: 입력칸을 채운 뒤 일반 로그인과 같은 경로로 제출한다
-  var DEMO_USERNAME = "demo";
-  var DEMO_PASSWORD = "sjlab-demo-2026";
-  document.getElementById("demoBtn").addEventListener("click", function () {
-    document.getElementById("username").value = DEMO_USERNAME;
-    document.getElementById("password").value = DEMO_PASSWORD;
-    if (typeof formEl.requestSubmit === "function") {
-      formEl.requestSubmit();
-    } else {
-      formEl.dispatchEvent(new Event("submit", { cancelable: true }));
-    }
+  // 체험용 계정: 계정 정보는 서버(환경변수)에만 있다. 페이지에는 아이디·비밀번호를 두지 않는다.
+  var demoBtn = document.getElementById("demoBtn");
+  demoBtn.addEventListener("click", function () {
+    errorEl.textContent = "";
+    demoBtn.disabled = true;
+    submitBtn.disabled = true;
+
+    fetch("/auth/login/demo", { method: "POST", credentials: "include" })
+      .then(function (res) {
+        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          errorEl.textContent = result.body.message || "체험용 계정으로 로그인하지 못했습니다.";
+          demoBtn.disabled = false;
+          submitBtn.disabled = false;
+          return;
+        }
+        completeLogin(result.body);
+      })
+      .catch(function () {
+        errorEl.textContent = "서버에 연결하지 못했습니다.";
+        demoBtn.disabled = false;
+        submitBtn.disabled = false;
+      });
   });
 })();
 </script>

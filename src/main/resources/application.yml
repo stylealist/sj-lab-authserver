@@ -25,6 +25,13 @@ auth:
     # http(로컬)에서는 Secure 쿠키가 저장되지 않으므로 local 프로파일에서만 false. 그 외 환경은 항상 true.
     secure: true
 
+  # 로그인 페이지 "체험용 계정으로 로그인"(POST /auth/login/demo)이 쓰는 QFieldCloud 계정.
+  # 저장소가 public 이라 값은 환경변수(운영은 k8s Secret auth-demo-credentials)로만 주입한다.
+  # 비어 있으면 데모 버튼만 503, 일반 로그인은 그대로 동작한다.
+  demo:
+    username: ${AUTH_DEMO_USERNAME:}
+    password: ${AUTH_DEMO_PASSWORD:}
+
 management:
   endpoints:
     web:
