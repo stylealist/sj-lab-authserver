@@ -75,6 +75,27 @@
     cursor: pointer;
   }
   button:disabled { opacity: 0.6; cursor: default; }
+  .demo {
+    margin-top: 1.25rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  button.demo-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    font-weight: 500;
+  }
+  button.demo-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
+  .demo-info {
+    margin: 0.55rem 0 0;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+  }
+  .demo-info code {
+    font-family: Consolas, "D2Coding", monospace;
+    color: rgba(255, 255, 255, 0.8);
+  }
   .error {
     min-height: 1.1rem;
     margin: -0.5rem 0 1rem;
@@ -110,6 +131,12 @@
       <input id="password" name="password" type="password" autocomplete="current-password" required />
       <div id="error" class="error"></div>
       <button id="submitBtn" type="submit">로그인</button>
+
+      <!-- 포트폴리오 방문자용 체험 계정. QFieldCloud에서 프로젝트 권한 없는 일반 계정으로만 운영할 것 -->
+      <div class="demo">
+        <button id="demoBtn" class="demo-btn" type="button">체험용 계정으로 로그인</button>
+        <p class="demo-info">아이디 <code>demo</code> · 비밀번호 <code>sjlab-demo-2026</code></p>
+      </div>
     </form>
 
     <p class="hint" id="redirectHint"></p>
@@ -229,6 +256,19 @@
         errorEl.textContent = "서버에 연결하지 못했습니다.";
         submitBtn.disabled = false;
       });
+  });
+
+  // 체험용 계정: 입력칸을 채운 뒤 일반 로그인과 같은 경로로 제출한다
+  var DEMO_USERNAME = "demo";
+  var DEMO_PASSWORD = "sjlab-demo-2026";
+  document.getElementById("demoBtn").addEventListener("click", function () {
+    document.getElementById("username").value = DEMO_USERNAME;
+    document.getElementById("password").value = DEMO_PASSWORD;
+    if (typeof formEl.requestSubmit === "function") {
+      formEl.requestSubmit();
+    } else {
+      formEl.dispatchEvent(new Event("submit", { cancelable: true }));
+    }
   });
 })();
 </script>
