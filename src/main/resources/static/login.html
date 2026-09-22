@@ -105,10 +105,58 @@
     font-size: 0.9rem;
   }
   [hidden] { display: none !important; }
+
+  /* 로그인 처리 중 표시 — QFieldCloud 확인까지 1~2초 걸리므로 진행 중임을 보여준다 */
+  .card { position: relative; overflow: hidden; }
+  .progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .progress::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -40%;
+    width: 40%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, #60a5fa, transparent);
+    animation: progress-slide 1.1s ease-in-out infinite;
+  }
+  .card.busy .progress { opacity: 1; }
+  @keyframes progress-slide {
+    from { left: -40%; }
+    to { left: 100%; }
+  }
+  button .btn-content {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  button.is-loading:disabled { opacity: 0.85; }
+  @media (prefers-reduced-motion: reduce) {
+    .progress::after, .spinner { animation-duration: 2.5s; }
+  }
 </style>
 </head>
 <body>
   <div class="card">
+    <div class="progress" aria-hidden="true"></div>
     <h1>SJ-LAB</h1>
     <p class="sub">QFieldCloud 계정으로 로그인합니다</p>
 
@@ -188,10 +236,12 @@
     } else {
       loadingEl.hidden = true;
       formEl.hidden = true;
-      document.querySelector(".card").insertAdjacentHTML(
-        "beforeend",
-        '<p style="color:#86efac;font-size:0.9rem;margin-top:1rem;">' + data.username + '님, 로그인되었습니다.</p>'
-      );
+      setBusy(null);
+      formEl.hidden = true;
+      var done = document.createElement("p");
+      done.style.cssText = "color:#86efac;font-size:0.9rem;margin-top:1rem;";
+      done.textContent = data.username + "님, 로그인되었습니다.";
+      document.querySelector(".card").appendChild(done);
     }
   }
 
@@ -216,62 +266,67 @@
       });
   }
 
+  var demoBtn = document.getElementById("demoBtn");
+  var cardEl = document.querySelector(".card");
+  var inputEls = [document.getElementById("username"), document.getElementById("password")];
+
+  // 처리 중: 누른 버튼에 스피너 + "로그인 중...", 카드 위 진행 막대, 버튼·입력칸 잠금.
+  // 성공하면 곧바로 원래 사이트로 이동하므로 로딩 상태를 풀지 않는다.
+  function setBusy(activeBtn) {
+    var busy = !!activeBtn;
+    cardEl.classList.toggle("busy", busy);
+    cardEl.setAttribute("aria-busy", busy ? "true" : "false");
+    [submitBtn, demoBtn].forEach(function (btn) {
+      btn.disabled = busy;
+      btn.classList.toggle("is-loading", btn === activeBtn);
+      if (btn === activeBtn) {
+        btn.dataset.label = btn.textContent;
+        btn.innerHTML = '<span class="btn-content"><span class="spinner" aria-hidden="true"></span>로그인 중...</span>';
+      } else if (btn.dataset.label) {
+        btn.textContent = btn.dataset.label;
+        delete btn.dataset.label;
+      }
+    });
+    inputEls.forEach(function (el) { el.disabled = busy; });
+  }
+
+  function runLogin(url, options, activeBtn, failMessage) {
+    errorEl.textContent = "";
+    setBusy(activeBtn);
+    fetch(url, options)
+      .then(function (res) {
+        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          setBusy(null);
+          errorEl.textContent = result.body.message || failMessage;
+          return;
+        }
+        completeLogin(result.body);
+      })
+      .catch(function () {
+        setBusy(null);
+        errorEl.textContent = "서버에 연결하지 못했습니다.";
+      });
+  }
+
   formEl.addEventListener("submit", function (e) {
     e.preventDefault();
-    errorEl.textContent = "";
-    submitBtn.disabled = true;
-
     var username = document.getElementById("username").value.trim();
     var password = document.getElementById("password").value;
-
-    fetch("/auth/login", {
+    runLogin("/auth/login", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: username, password: password })
-    })
-      .then(function (res) {
-        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
-      })
-      .then(function (result) {
-        if (!result.ok) {
-          errorEl.textContent = result.body.message || "로그인에 실패했습니다.";
-          submitBtn.disabled = false;
-          return;
-        }
-        completeLogin(result.body);
-      })
-      .catch(function () {
-        errorEl.textContent = "서버에 연결하지 못했습니다.";
-        submitBtn.disabled = false;
-      });
+    }, submitBtn, "로그인에 실패했습니다.");
   });
 
   // 체험용 계정: 계정 정보는 서버(환경변수)에만 있다. 페이지에는 아이디·비밀번호를 두지 않는다.
-  var demoBtn = document.getElementById("demoBtn");
   demoBtn.addEventListener("click", function () {
-    errorEl.textContent = "";
-    demoBtn.disabled = true;
-    submitBtn.disabled = true;
-
-    fetch("/auth/login/demo", { method: "POST", credentials: "include" })
-      .then(function (res) {
-        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
-      })
-      .then(function (result) {
-        if (!result.ok) {
-          errorEl.textContent = result.body.message || "체험용 계정으로 로그인하지 못했습니다.";
-          demoBtn.disabled = false;
-          submitBtn.disabled = false;
-          return;
-        }
-        completeLogin(result.body);
-      })
-      .catch(function () {
-        errorEl.textContent = "서버에 연결하지 못했습니다.";
-        demoBtn.disabled = false;
-        submitBtn.disabled = false;
-      });
+    runLogin("/auth/login/demo", { method: "POST", credentials: "include" },
+      demoBtn, "체험용 계정으로 로그인하지 못했습니다.");
   });
 })();
 </script>
