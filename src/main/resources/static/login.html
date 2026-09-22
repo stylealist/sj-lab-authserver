@@ -179,16 +179,26 @@
     }
   }
 
-  // 이 오리진에 이미 유효한 세션 쿠키가 있으면 폼을 보여주지 않고 바로 돌려보낸다.
-  fetch("/auth/session", { method: "GET", credentials: "include" })
-    .then(function (res) {
-      if (!res.ok) throw new Error("no-session");
-      return res.json();
-    })
-    .then(completeLogin)
-    .catch(function () {
-      showForm();
-    });
+  if (params.get("logout") === "1") {
+    // 각 사이트의 로그아웃 버튼은 자기 localStorage만 지울 수 있다. 여기서 세션 쿠키까지
+    // 지우지 않으면 아래 세션 확인이 곧바로 새 토큰을 발급해 되돌려 보내 로그아웃이 안 된다.
+    fetch("/auth/logout", { method: "POST", credentials: "include" })
+      .catch(function () { /* 실패해도 폼은 보여준다 */ })
+      .then(function () {
+        showForm();
+      });
+  } else {
+    // 이 오리진에 이미 유효한 세션 쿠키가 있으면 폼을 보여주지 않고 바로 돌려보낸다.
+    fetch("/auth/session", { method: "GET", credentials: "include" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("no-session");
+        return res.json();
+      })
+      .then(completeLogin)
+      .catch(function () {
+        showForm();
+      });
+  }
 
   formEl.addEventListener("submit", function (e) {
     e.preventDefault();

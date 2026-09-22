@@ -49,6 +49,7 @@ docker build -t sj-lab-authserver .
 
 - **쿠키(`sj_session`)는 이 로그인 페이지 자신의 오리진에만 쓰인다** — hub/mapservice 로는 전혀 전달되지 않는다(각 사이트는 3번 단계의 URL 해시로 받은 토큰을 **자기 localStorage**에 각자 저장). 그래서 쿠키의 `SameSite`/`Secure`/도메인 공유를 고민할 필요가 없다 — 로그인 페이지 자기 자신에게 다시 접속할 때만(=최상위 탐색, `SameSite=Lax`로 충분) "이미 로그인했는지" 확인하는 용도.
 - `GET /session`: 쿠키만으로 인증(Authorization 헤더 불필요). 유효하면 **새 토큰을 발급**해 돌려준다(리프레시처럼 동작).
+- **로그아웃 흐름**: 각 사이트의 `SjLabAuth.logout()`은 자기 localStorage를 지운 뒤 `/auth/login.html?...&logout=1`로 이동하고, `login.html`이 `logout=1`을 보면 세션 확인 대신 `POST /auth/logout`으로 세션 쿠키를 지운 뒤 폼을 보여준다. **이 단계를 빼면 로그인 페이지가 살아있는 세션 쿠키로 곧바로 새 토큰을 발급해 되돌려 보내 로그아웃이 안 된다**(2026-09-22 실제 발생).
 - `POST /logout`: 이 서버(로그인 페이지)의 세션 쿠키만 지운다. **각 사이트가 이미 받아 간 토큰까지 무효화하지는 않는다** — 진짜 single-logout(다른 탭/사이트까지 전부 로그아웃)은 구현하지 않았다(아래 남은 작업 참고). 프론트의 `SjLabAuth.logout()`은 자기 localStorage를 지우고 로그인 페이지로 보내는 것까지만 한다.
 - `redirect_uri` 오픈 리다이렉트 방지: `login.html`이 허용 오리진 목록(`localhost:3000`, `localhost:4000`, `https://sj-lab.co.kr`, `https://www.sj-lab.co.kr`)에 없는 `redirect_uri`는 거부한다. 새 프론트 도메인을 추가하면 `login.html`의 `ALLOWED_REDIRECT_ORIGINS`도 함께 고칠 것.
 - 프론트 쪽 gate 스크립트(`sj-lab-mapservice`의 `js/auth-gate.js`, `sj-lab-hub`의 `public/index.html` 인라인 스크립트)는 이 저장소가 아니라 각 프론트 저장소에 있다 — 로직은 동일하지만 빌드 도구가 달라(하나는 무빌드 정적 사이트, 하나는 webpack) 공유 모듈 대신 내용을 복제했다. 한쪽을 고치면 다른 쪽도 함께 고칠 것.
