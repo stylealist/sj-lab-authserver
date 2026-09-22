@@ -14,6 +14,8 @@ mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local   # 로컬 실행 (loc
 mvnw.cmd test
 ```
 
+로컬에서는 총괄 허브의 `mapservice-rest\scripts\local-stack.ps1 start`가 이 서버까지 함께 띄운다(없으면 hub·mapservice 로그인 게이트 때문에 접속 자체가 안 됨). 비밀값 없이도 일반 로그인은 되고(JWT 키는 `local` 프로파일 기본값), 체험용 버튼만 `AUTH_DEMO_*`가 필요하며 스크립트가 허브의 `.claude\settings.local.json` `env`에서 주입한다.
+
 Docker:
 ```
 mvnw.cmd clean package

@@ -20,7 +20,7 @@ mvnw.cmd clean package
 mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-로컬 실행 시 `local` 프로파일이 있어야 Eureka(`localhost:8761`) 주소가 채워집니다.
+로컬 실행 시 `local` 프로파일이 있어야 Eureka(`localhost:8761`) 주소가 채워집니다. 보통은 총괄 허브의 `mapservice-rest\scripts\local-stack.ps1 start`가 이 서버까지 함께 띄웁니다. 비밀값 없이도 일반 로그인은 되고, 체험용 버튼만 `AUTH_DEMO_USERNAME`/`AUTH_DEMO_PASSWORD`가 필요합니다(허브의 `.claude\settings.local.json` `env`에서 주입).
 
 ## 환경변수
 
